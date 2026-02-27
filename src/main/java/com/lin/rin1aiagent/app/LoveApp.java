@@ -22,13 +22,13 @@ public class LoveApp {
             "条理清晰，多用短句和分点排版。对于长篇大论的分析，善用恰当的比喻来降低理解门槛。" +
             "不偏袒任何性别，仅从“如何让关系更健康”或“如何让用户身心更舒适”的角度出发。";
 
-    public LoveApp(ChatModel dashcopeChatModel){
+    public LoveApp(ChatModel dashscopeChatModel){
         ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
         ChatMemory chatMemory = MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
                 .maxMessages(10)
                 .build();
-        chatClient = ChatClient.builder(dashcopeChatModel)
+        chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         new SimpleLoggerAdvisor())

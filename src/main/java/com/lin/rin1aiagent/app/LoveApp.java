@@ -1,15 +1,18 @@
 package com.lin.rin1aiagent.app;
 
+import com.lin.rin1aiagent.advisor.SimpleLoggerAdvisor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @Slf4j
@@ -42,5 +45,19 @@ public class LoveApp {
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
                 .call()
                 .content();
+    }
+
+    //结构化输出
+    record LoveReport(String title, List<String> suggestions){}
+
+    public LoveReport doChatWithReport(String message,String chatId){
+         LoveReport loveReport =  chatClient
+                .prompt()
+                .system(SYSTEM_PROMPT + "每次对话后都要生成恋爱结果，标题为{用户名}的恋爱报告，内容为建议列表")
+                .user(message)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
+                .call()
+                .entity(LoveReport.class);
+         return loveReport;
     }
 }

@@ -1,6 +1,7 @@
 package com.lin.rin1aiagent.app;
 
 import com.lin.rin1aiagent.advisor.SimpleLoggerAdvisor;
+import com.lin.rin1aiagent.chatmemory.FileBasedChatMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -26,11 +27,17 @@ public class LoveApp {
             "不偏袒任何性别，仅从“如何让关系更健康”或“如何让用户身心更舒适”的角度出发。";
 
     public LoveApp(ChatModel dashscopeChatModel){
-        ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
-        ChatMemory chatMemory = MessageWindowChatMemory.builder()
-                .chatMemoryRepository(repository)
-                .maxMessages(10)
-                .build();
+
+        //基于文件的对话记忆
+        String fileDir = System.getProperty("user.dir") + "/tmp/chat-memory";
+        ChatMemory chatMemory = new FileBasedChatMemory(fileDir);
+
+        //基于内存的对话记忆
+//        ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
+//        ChatMemory chatMemory = MessageWindowChatMemory.builder()
+//                .chatMemoryRepository(repository)
+//                .maxMessages(10)
+//                .build();
         chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),

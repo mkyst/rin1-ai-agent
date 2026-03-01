@@ -21,5 +21,6 @@ public class TavilySearchRequest {
     @JsonProperty("max_results")
     @Min(1)
     @Max(10)
+    @Builder.Default
     private Integer maxResults = 5;
 }

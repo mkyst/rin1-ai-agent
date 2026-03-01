@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: rin-ai-agent
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:test-key}
+  autoconfigure:
+    exclude:
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+
+# springdoc-openapi????
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.lin.rinaiagent.controller
+# knife4j???????????????
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+logging:
+  level:
+    com.lin.rin1aiagent.advisor: DEBUG
+
+# Tavily API configuration - disabled for tests
+tavily:
+  api-key: ${TAVILY_API_KEY:}
+  api-url: https://api.tavily.com/search

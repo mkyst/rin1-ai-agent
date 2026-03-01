@@ -37,5 +37,5 @@ logging:
 
 # Tavily API configuration - disabled for tests
 tavily:
-  api-key: ${TAVILY_API_KEY:}
+  api-key: ${TAVILY_API_KEY:test-api-key-for-unit-tests}
   api-url: https://api.tavily.com/search

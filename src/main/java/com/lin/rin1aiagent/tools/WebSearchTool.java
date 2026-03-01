@@ -87,9 +87,16 @@ public class WebSearchTool {
 
         for (int i = 0; i < results.size(); i++) {
             TavilySearchResult item = results.get(i);
-            result.append(i + 1).append(". ").append(item.getTitle()).append("\n");
-            result.append("   链接: ").append(item.getUrl()).append("\n");
-            result.append("   摘要: ").append(item.getContent()).append("\n\n");
+            if (item == null) {
+                continue;
+            }
+
+            result.append(i + 1).append(". ");
+            result.append(item.getTitle() != null ? item.getTitle() : "无标题").append("\n");
+            result.append("   链接: ");
+            result.append(item.getUrl() != null ? item.getUrl() : "无链接").append("\n");
+            result.append("   摘要: ");
+            result.append(item.getContent() != null ? item.getContent() : "无摘要").append("\n\n");
         }
 
         return result.toString();

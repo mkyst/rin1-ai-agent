@@ -36,9 +36,9 @@ public class SensitiveWordAdvisor implements CallAdvisor {
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
         // 检查用户消息中的违禁词
-        for (Message message : request.messages()) {
+        for (Message message : request.prompt().getInstructions()) {
             if (message instanceof UserMessage userMessage) {
-                String content = userMessage.getContent();
+                String content = userMessage.getText();
 
                 for (String word : sensitiveWords) {
                     if (content.contains(word)) {

@@ -34,7 +34,7 @@ public class PermissionCheckAdvisor implements CallAdvisor {
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
         // 从 advisorParams 中获取用户ID
-        String userId = (String) request.advisorParams().get("userId");
+        String userId = (String) request.context().get("userId");
 
         log.info("权限校验: userId={}", userId);
 

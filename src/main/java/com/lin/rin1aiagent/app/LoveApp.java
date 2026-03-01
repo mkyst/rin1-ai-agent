@@ -2,15 +2,19 @@ package com.lin.rin1aiagent.app;
 
 import com.lin.rin1aiagent.advisor.SimpleLoggerAdvisor;
 import com.lin.rin1aiagent.chatmemory.FileBasedChatMemory;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -66,5 +70,20 @@ public class LoveApp {
                 .call()
                 .entity(LoveReport.class);
          return loveReport;
+    }
+
+    @Resource
+    private VectorStore vectorStore;
+
+    public String doChatWithRag(String message, String chatId) {
+        return chatClient
+                .prompt()
+                .user(message)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
+                .advisors(RetrievalAugmentationAdvisor.builder()
+                        .documentRetriever(VectorStoreDocumentRetriever.builder().vectorStore(vectorStore).build())
+                        .build())
+                .call()
+                .content();
     }
 }

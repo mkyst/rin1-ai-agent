@@ -10,33 +10,60 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 @Slf4j
 public class McpToolCallbackProviderConfig {
-    private McpClient mcpClient;
+    private final Map<String, McpClient> mcpClients = new HashMap<>();
 
     @Bean
     public ToolCallbackProvider toolCallbackProvider() {
         try {
-            // Read configuration
+            // Read all MCP server configurations
             McpConfigReader configReader = new McpConfigReader();
-            McpServerConfig serverConfig = configReader.readAmapConfig();
+            Map<String, McpServerConfig> serverConfigs = configReader.readAllConfigs();
 
-            // Initialize MCP client
-            mcpClient = new McpClient(serverConfig);
-            mcpClient.initialize();
-
-            // Discover tools
-            List<McpToolDefinition> tools = mcpClient.listTools();
-            log.info("Loaded {} MCP tools from amap-maps server", tools.size());
-
-            for (McpToolDefinition tool : tools) {
-                log.info("Registered MCP tool: {} - {}", tool.getName(), tool.getDescription());
+            if (serverConfigs.isEmpty()) {
+                log.warn("No MCP servers configured");
+                return () -> new org.springframework.ai.tool.ToolCallback[0];
             }
 
-            // Return a simple provider that delegates to mcpClient
+            // Initialize all MCP clients
+            int totalTools = 0;
+            for (Map.Entry<String, McpServerConfig> entry : serverConfigs.entrySet()) {
+                String serverName = entry.getKey();
+                McpServerConfig serverConfig = entry.getValue();
+
+                try {
+                    log.info("Initializing MCP server: {}", serverName);
+                    McpClient client = new McpClient(serverConfig);
+                    client.initialize();
+
+                    // Discover tools
+                    List<McpToolDefinition> tools = client.listTools();
+                    log.info("Loaded {} tools from MCP server: {}", tools.size(), serverName);
+
+                    for (McpToolDefinition tool : tools) {
+                        log.info("  - {} : {}", tool.getName(), tool.getDescription());
+                    }
+
+                    mcpClients.put(serverName, client);
+                    totalTools += tools.size();
+
+                } catch (Exception e) {
+                    log.error("Failed to initialize MCP server: {}", serverName, e);
+                    // Continue with other servers
+                }
+            }
+
+            log.info("Successfully initialized {} MCP servers with {} total tools",
+                    mcpClients.size(), totalTools);
+
+            // Return empty provider for now (tools are registered but not yet converted to ToolCallbacks)
             return () -> new org.springframework.ai.tool.ToolCallback[0];
 
         } catch (Exception e) {
@@ -47,8 +74,15 @@ public class McpToolCallbackProviderConfig {
 
     @PreDestroy
     public void cleanup() {
-        if (mcpClient != null) {
-            mcpClient.shutdown();
+        log.info("Shutting down {} MCP clients", mcpClients.size());
+        for (Map.Entry<String, McpClient> entry : mcpClients.entrySet()) {
+            try {
+                log.info("Shutting down MCP server: {}", entry.getKey());
+                entry.getValue().shutdown();
+            } catch (Exception e) {
+                log.error("Error shutting down MCP server: {}", entry.getKey(), e);
+            }
         }
+        mcpClients.clear();
     }
 }

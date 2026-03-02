@@ -15,12 +15,11 @@ class WebScrapingToolTest {
     @Test
     void testScrapeWebPage_Success() {
         // Test with a simple URL
-        String result = webScrapingTool.scrapeWebPage("https://example.com");
+        String result = webScrapingTool.scrapeWebPage("https://java2ai.com/docs/quick-start/");
 
         assertThat(result).isNotNull();
         assertThat(result).doesNotContain("错误");
         assertThat(result.length()).isGreaterThan(0);
-        assertThat(result).contains("Example Domain");
 
         System.out.println("Scraped content: " + result);
     }

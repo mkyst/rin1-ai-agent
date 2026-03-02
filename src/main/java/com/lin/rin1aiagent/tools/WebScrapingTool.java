@@ -43,6 +43,7 @@ public class WebScrapingTool {
                 return String.format("错误: HTTP 请求失败，状态码: %d", response.getStatus());
             }
 
+            // Get body with proper charset detection
             String html = response.body();
             String textContent = extractTextFromHtml(html);
 

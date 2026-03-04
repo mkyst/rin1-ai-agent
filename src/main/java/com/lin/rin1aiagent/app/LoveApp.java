@@ -18,6 +18,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -112,5 +113,46 @@ public class LoveApp {
         String content = chatResponse.getResult().getOutput().getText();
         log.info("content: {}", content);
         return content;
+    }
+
+    /**
+     * 流式调用 AI 恋爱大师（基础版）
+     */
+    public Flux<String> doChatStream(String message, String chatId) {
+        return chatClient
+                .prompt()
+                .user(message)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
+                .stream()
+                .content();
+    }
+
+    /**
+     * 流式调用 AI 恋爱大师（带 RAG）
+     */
+    public Flux<String> doChatWithRagStream(String message, String chatId) {
+        return chatClient
+                .prompt()
+                .user(message)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
+                .advisors(RetrievalAugmentationAdvisor.builder()
+                        .documentRetriever(VectorStoreDocumentRetriever.builder().vectorStore(vectorStore).build())
+                        .build())
+                .stream()
+                .content();
+    }
+
+    /**
+     * 流式调用 AI 恋爱大师（带 MCP 工具）
+     */
+    public Flux<String> doChatWithMcpStream(String message, String chatId) {
+        return chatClient
+                .prompt()
+                .user(message)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
+                .advisors(new SimpleLoggerAdvisor())
+                .toolCallbacks(toolCallbackProvider)
+                .stream()
+                .content();
     }
 }

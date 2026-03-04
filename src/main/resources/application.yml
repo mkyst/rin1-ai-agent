@@ -3,7 +3,7 @@ spring:
     name: rin-ai-agent
   ai:
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY}
+      api-key: ${DASHSCOPE_API_KEY:}
   autoconfigure:
     exclude:
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
@@ -36,6 +36,6 @@ logging:
     com.lin.rin1aiagent.advisor: DEBUG
 
 tavily:
-  api-key: ${TAVILY_API_KEY}
+  api-key: ${TAVILY_API_KEY:}
   api-url: https://api.tavily.com/search
 

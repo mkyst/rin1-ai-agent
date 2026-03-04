@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --paper: #f5efe4;
+  --paper-strong: #ede3d2;
+  --ink: #201c15;
+  --ink-soft: #5c5348;
+  --line: #d7c8b2;
+  --brand: #bf4c2a;
+  --brand-soft: #f0d4c9;
+  --teal: #1f6d66;
+  --shadow: 0 22px 46px rgba(73, 58, 42, 0.16);
+
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--ink);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(191, 76, 42, 0.15), transparent 45%),
+    radial-gradient(circle at 88% 100%, rgba(31, 109, 102, 0.12), transparent 40%),
+    repeating-linear-gradient(
+      -23deg,
+      rgba(215, 200, 178, 0.24) 0 1px,
+      transparent 1px 38px
+    ),
+    var(--paper);
+  color: var(--ink);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}

@@ -6,15 +6,11 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.ChatMemoryRepository;
-import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
@@ -26,33 +22,26 @@ import java.util.List;
 @Slf4j
 public class LoveApp {
 
+    private static final String SYSTEM_PROMPT = "你是一个恋爱关系顾问。请始终使用简体中文回答，" +
+            "给出务实、共情、结构清晰的建议，尽量用短句和分点。";
+
+    private static final String MCP_TOOL_POLICY_PROMPT = "当工具可用时，针对时效性/事实性问题优先调用工具检索，" +
+            "不要只依赖模型记忆。如果没有可用工具，明确说明当前无法进行实时联网搜索。";
+
     private final ChatClient chatClient;
 
-    private static final String SYSTEM_PROMPT = "你是一个拥有丰富心理学知识和极高情商的恋爱专家。你的核心使命是帮助用户建立、维护健康长久的亲密关系，解答恋爱中的疑难杂症，并提供切实可行的沟通策略与情感支持。" +
-            "温柔、坚定、幽默且富有洞察力。就像一位既能在深夜陪你喝酒倾听，又能一语点醒梦中人的知心挚友。" +
-            "条理清晰，多用短句和分点排版。对于长篇大论的分析，善用恰当的比喻来降低理解门槛。" +
-            "不偏袒任何性别，仅从“如何让关系更健康”或“如何让用户身心更舒适”的角度出发。";
-
-    public LoveApp(ChatModel dashscopeChatModel){
-
-        //基于文件的对话记忆
+    public LoveApp(ChatModel dashscopeChatModel) {
         String fileDir = System.getProperty("user.dir") + "/tmp/chat-memory";
         ChatMemory chatMemory = new FileBasedChatMemory(fileDir);
 
-        //基于内存的对话记忆
-//        ChatMemoryRepository repository = new InMemoryChatMemoryRepository();
-//        ChatMemory chatMemory = MessageWindowChatMemory.builder()
-//                .chatMemoryRepository(repository)
-//                .maxMessages(10)
-//                .build();
-        chatClient = ChatClient.builder(dashscopeChatModel)
+        this.chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         new SimpleLoggerAdvisor())
                 .build();
     }
 
-    public String doChat(String message,String chatId){
+    public String doChat(String message, String chatId) {
         return chatClient
                 .prompt()
                 .user(message)
@@ -61,18 +50,17 @@ public class LoveApp {
                 .content();
     }
 
-    //结构化输出
-    record LoveReport(String title, List<String> suggestions){}
+    public record LoveReport(String title, List<String> suggestions) {
+    }
 
-    public LoveReport doChatWithReport(String message,String chatId){
-         LoveReport loveReport =  chatClient
+    public LoveReport doChatWithReport(String message, String chatId) {
+        return chatClient
                 .prompt()
-                .system(SYSTEM_PROMPT + "每次对话后都要生成恋爱结果，标题为{用户名}的恋爱报告，内容为建议列表")
+                .system(SYSTEM_PROMPT + " Always output a title and a suggestion list.")
                 .user(message)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
                 .call()
                 .entity(LoveReport.class);
-         return loveReport;
     }
 
     @Resource
@@ -93,31 +81,22 @@ public class LoveApp {
     @Resource
     private ToolCallbackProvider toolCallbackProvider;
 
-    /**
-     * AI 恋爱报告功能（调用 MCP 服务）
-     *
-     * @param message
-     * @param chatId
-     * @return
-     */
     public String doChatWithMcp(String message, String chatId) {
         ChatResponse chatResponse = chatClient
                 .prompt()
+                .system(SYSTEM_PROMPT + " " + MCP_TOOL_POLICY_PROMPT)
                 .user(message)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
-                // 开启日志，便于观察效果
                 .advisors(new SimpleLoggerAdvisor())
                 .toolCallbacks(toolCallbackProvider)
                 .call()
                 .chatResponse();
+
         String content = chatResponse.getResult().getOutput().getText();
         log.info("content: {}", content);
         return content;
     }
 
-    /**
-     * 流式调用 AI 恋爱大师（基础版）
-     */
     public Flux<String> doChatStream(String message, String chatId) {
         return chatClient
                 .prompt()
@@ -127,9 +106,6 @@ public class LoveApp {
                 .content();
     }
 
-    /**
-     * 流式调用 AI 恋爱大师（带 RAG）
-     */
     public Flux<String> doChatWithRagStream(String message, String chatId) {
         return chatClient
                 .prompt()
@@ -142,12 +118,10 @@ public class LoveApp {
                 .content();
     }
 
-    /**
-     * 流式调用 AI 恋爱大师（带 MCP 工具）
-     */
     public Flux<String> doChatWithMcpStream(String message, String chatId) {
         return chatClient
                 .prompt()
+                .system(SYSTEM_PROMPT + " " + MCP_TOOL_POLICY_PROMPT)
                 .user(message)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId))
                 .advisors(new SimpleLoggerAdvisor())

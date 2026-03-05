@@ -23,7 +23,7 @@ const MODE_OPTIONS: Array<{ value: ChatMode; label: string; description: string 
   <header class="app-header">
     <div class="app-header__brand">
       <p class="app-header__eyebrow">Rin1 Relationship Console</p>
-      <h1 class="app-header__title">AI 恋爱顾问工作台</h1>
+      <h1 class="app-header__title">AI 恋爱顾问咨询室</h1>
       <p class="app-header__subtitle">流式分析 · 关系修复 · 行动建议</p>
     </div>
 

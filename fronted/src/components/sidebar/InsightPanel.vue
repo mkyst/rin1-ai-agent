@@ -1,9 +1,11 @@
-<script setup lang="ts">
-import type { InsightCard } from '../../types/chat'
+﻿<script setup lang="ts">
+import RelationshipRadar from './RelationshipRadar.vue'
+import type { InsightCard, RadarMetric } from '../../types/chat'
 
 defineProps<{
   cards: InsightCard[]
   quickPrompts: string[]
+  radarMetrics: RadarMetric[]
 }>()
 
 const emit = defineEmits<{
@@ -18,25 +20,29 @@ const emit = defineEmits<{
       <p class="panel__note">随模型回复动态更新</p>
     </div>
 
-    <div class="insight-cards">
-      <article v-for="card in cards" :key="card.title" class="insight-card">
-        <p class="insight-card__title">{{ card.title }}</p>
-        <p class="insight-card__value">{{ card.value }}</p>
-        <p class="insight-card__detail">{{ card.detail }}</p>
-      </article>
-    </div>
+    <div class="insight-scroll">
+      <RelationshipRadar class="insight-item" :metrics="radarMetrics" />
 
-    <div class="prompt-zone">
-      <h3 class="prompt-zone__title">快捷提问</h3>
-      <button
-        v-for="prompt in quickPrompts"
-        :key="prompt"
-        type="button"
-        class="prompt-btn"
-        @click="emit('usePrompt', prompt)"
-      >
-        {{ prompt }}
-      </button>
+      <section class="insight-item insight-cards-block">
+        <article v-for="card in cards" :key="card.title" class="insight-row">
+          <p class="insight-row__title">{{ card.title }}</p>
+          <p class="insight-row__value">{{ card.value }}</p>
+          <p class="insight-row__detail">{{ card.detail }}</p>
+        </article>
+      </section>
+
+      <section class="insight-item prompt-zone">
+        <h3 class="prompt-zone__title">快捷提问</h3>
+        <button
+          v-for="prompt in quickPrompts"
+          :key="prompt"
+          type="button"
+          class="prompt-btn"
+          @click="emit('usePrompt', prompt)"
+        >
+          {{ prompt }}
+        </button>
+      </section>
     </div>
   </aside>
 </template>
@@ -53,7 +59,7 @@ const emit = defineEmits<{
   height: 100%;
   min-height: 420px;
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .panel__header {
@@ -73,20 +79,37 @@ const emit = defineEmits<{
   color: var(--ink-soft);
 }
 
-.insight-cards {
+.insight-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
   padding: 0.9rem;
   display: grid;
-  gap: 0.7rem;
+  align-content: start;
+  gap: 0.75rem;
 }
 
-.insight-card {
+.insight-item {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 251, 243, 0.86);
-  padding: 0.72rem;
+  border-radius: 14px;
+  background: rgba(255, 251, 243, 0.88);
 }
 
-.insight-card__title {
+.insight-cards-block {
+  padding: 0.72rem;
+  display: grid;
+  gap: 0.58rem;
+}
+
+.insight-row {
+  border: 1px solid rgba(95, 83, 67, 0.24);
+  border-radius: 12px;
+  background: rgba(245, 239, 228, 0.7);
+  padding: 0.62rem 0.66rem;
+}
+
+.insight-row__title {
   margin: 0;
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -94,34 +117,32 @@ const emit = defineEmits<{
   color: var(--ink-soft);
 }
 
-.insight-card__value {
-  margin: 0.22rem 0 0;
-  font-size: 1.01rem;
+.insight-row__value {
+  margin: 0.2rem 0 0;
+  font-size: 1.02rem;
   font-weight: 700;
 }
 
-.insight-card__detail {
-  margin: 0.25rem 0 0;
+.insight-row__detail {
+  margin: 0.24rem 0 0;
   font-size: 0.8rem;
   color: var(--ink-soft);
 }
 
 .prompt-zone {
-  border-top: 1px solid var(--line);
-  padding: 0.8rem 0.9rem 0.9rem;
+  padding: 0.72rem;
   display: grid;
-  align-content: start;
   gap: 0.55rem;
 }
 
 .prompt-zone__title {
   margin: 0;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
 }
 
 .prompt-btn {
-  border: 1px solid var(--line);
-  border-radius: 11px;
+  border: 1px solid rgba(95, 83, 67, 0.24);
+  border-radius: 12px;
   padding: 0.58rem 0.65rem;
   text-align: left;
   background: rgba(245, 239, 228, 0.7);
@@ -138,5 +159,24 @@ const emit = defineEmits<{
   .insight-panel {
     min-height: auto;
   }
+
+  .insight-scroll {
+    max-height: 62dvh;
+  }
+}
+
+.insight-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.insight-scroll::-webkit-scrollbar-track {
+  background: rgba(95, 83, 67, 0.12);
+  border-radius: 999px;
+}
+
+.insight-scroll::-webkit-scrollbar-thumb {
+  background: rgba(95, 83, 67, 0.36);
+  border-radius: 999px;
+  border: 2px solid rgba(245, 239, 228, 0.9);
 }
 </style>

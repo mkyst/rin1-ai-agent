@@ -9,21 +9,18 @@ interface StreamChatOptions {
   onComplete?: () => void
 }
 
-// 后端 API 根地址：优先读取 .env 中的 VITE_API_BASE_URL
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8123/api'
+
 const STREAM_ENDPOINT_MAP: Record<ChatMode, string> = {
-  // 三种模式分别映射到后端的三个 SSE 接口
   basic: '/ai/love_app/chat/stream',
   rag: '/ai/love_app/chat/stream/rag',
   mcp: '/ai/love_app/chat/stream/mcp',
 }
 
-// 基础模式的同步兜底接口（非 SSE）
 const SYNC_ENDPOINT = '/ai/love_app/chat/sync'
 
 function buildUrl(endpoint: string, message: string, chatId: string) {
   const params = new URLSearchParams({
-    // 与后端 AiController 入参保持一致
     message,
     chatId,
   })
@@ -32,7 +29,6 @@ function buildUrl(endpoint: string, message: string, chatId: string) {
 
 export function streamChat(options: StreamChatOptions) {
   const url = buildUrl(STREAM_ENDPOINT_MAP[options.mode], options.message, options.chatId)
-  // EventSource 用于消费 text/event-stream 流式输出
   const eventSource = new EventSource(url)
   let disposed = false
   let receivedAnyData = false
@@ -47,13 +43,11 @@ export function streamChat(options: StreamChatOptions) {
   }
 
   eventSource.onmessage = (event) => {
-    // 后端每次推送一段 data，前端把分片持续拼接到消息气泡
     receivedAnyData = true
     options.onChunk(event.data)
   }
 
   eventSource.onerror = () => {
-    // 未收到任何分片就断流，视为连接失败
     if (!receivedAnyData) {
       options.onError?.('流式连接失败，请稍后重试。')
     }
@@ -71,4 +65,49 @@ export async function syncChat(message: string, chatId: string) {
     throw new Error(`请求失败：${response.status}`)
   }
   return response.text()
+}
+
+export function collectStreamChat(mode: ChatMode, message: string, chatId: string, timeoutMs = 60000) {
+  return new Promise<string>((resolve, reject) => {
+    let result = ''
+    let finished = false
+
+    const timer = window.setTimeout(() => {
+      if (finished) {
+        return
+      }
+      finished = true
+      stop()
+      reject(new Error('请求超时，请稍后重试。'))
+    }, timeoutMs)
+
+    const stop = streamChat({
+      mode,
+      message,
+      chatId,
+      onChunk: (chunk) => {
+        result += chunk
+      },
+      onError: (errorMessage) => {
+        if (finished) {
+          return
+        }
+        finished = true
+        window.clearTimeout(timer)
+        reject(new Error(errorMessage))
+      },
+      onComplete: () => {
+        if (finished) {
+          return
+        }
+        finished = true
+        window.clearTimeout(timer)
+        if (!result.trim()) {
+          reject(new Error('没有收到模型回复。'))
+          return
+        }
+        resolve(result)
+      },
+    })
+  })
 }

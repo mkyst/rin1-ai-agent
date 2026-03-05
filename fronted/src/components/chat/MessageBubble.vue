@@ -1,9 +1,54 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { ChatMessage } from '../../types/chat'
+import MarkdownContent from './MarkdownContent.vue'
 
-defineProps<{
+const props = defineProps<{
   message: ChatMessage
+  allowRevoke?: boolean
 }>()
+
+const emit = defineEmits<{
+  revoke: [messageId: string]
+}>()
+
+const copied = ref(false)
+let copiedTimer: number | undefined
+
+async function copyContent() {
+  const text = props.message.content?.trim()
+  if (!text) {
+    return
+  }
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    copied.value = true
+    if (copiedTimer) {
+      window.clearTimeout(copiedTimer)
+    }
+    copiedTimer = window.setTimeout(() => {
+      copied.value = false
+    }, 1300)
+  } catch {
+    copied.value = false
+  }
+}
+
+function onRevoke() {
+  emit('revoke', props.message.id)
+}
 </script>
 
 <template>
@@ -12,7 +57,25 @@ defineProps<{
       <p class="bubble__meta">
         {{ message.role === 'assistant' ? '顾问助手' : '你' }}
       </p>
-      <p class="bubble__content">{{ message.content || (message.isStreaming ? '...' : '') }}</p>
+
+      <div class="bubble__content">
+        <MarkdownContent :content="message.content || (message.isStreaming ? '...' : '')" />
+      </div>
+
+      <div class="bubble__actions">
+        <button type="button" class="bubble-action" @click="copyContent">
+          {{ copied ? '已复制' : '复制' }}
+        </button>
+        <button
+          v-if="message.role === 'user'"
+          type="button"
+          class="bubble-action bubble-action--warn"
+          :disabled="!allowRevoke"
+          @click="onRevoke"
+        >
+          撤回
+        </button>
+      </div>
     </div>
   </article>
 </template>
@@ -59,9 +122,38 @@ defineProps<{
 }
 
 .bubble__content {
-  margin: 0.26rem 0 0;
-  white-space: pre-wrap;
+  margin-top: 0.26rem;
   line-height: 1.54;
+}
+
+.bubble__actions {
+  margin-top: 0.45rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.34rem;
+}
+
+.bubble-action {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(245, 239, 228, 0.82);
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  padding: 0.12rem 0.5rem;
+  cursor: pointer;
+}
+
+.bubble-action:hover:not(:disabled) {
+  border-color: #b9a688;
+}
+
+.bubble-action--warn {
+  color: #8f5847;
+}
+
+.bubble-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @keyframes bubble-enter {

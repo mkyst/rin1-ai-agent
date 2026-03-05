@@ -15,6 +15,7 @@ export interface ChatSessionSummary {
   id: string
   title: string
   preview: string
+  tags: string[]
   updatedAt: string
 }
 
@@ -22,4 +23,19 @@ export interface InsightCard {
   title: string
   value: string
   detail: string
+}
+
+export interface RadarMetric {
+  key: 'emotion' | 'conflict' | 'trust' | 'actionability'
+  label: string
+  value: number
+}
+
+export type CompareStatus = 'idle' | 'loading' | 'success' | 'error'
+
+export interface CompareModeResult {
+  mode: ChatMode
+  status: CompareStatus
+  content: string
+  error?: string
 }

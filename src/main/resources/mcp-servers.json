@@ -9,7 +9,13 @@
       "env": {
         "AMAP_MAPS_API_KEY": "5095196bafba119fc09d39d5c5ffe5da"
       }
+    },
+    "ddg-search": {
+      "command": "npx.cmd",
+      "args": [
+        "-y",
+        "duckduckgo-mcp-server"
+      ]
     }
-
   }
 }

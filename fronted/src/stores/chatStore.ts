@@ -5,12 +5,22 @@ import type { ChatMessage, ChatMode, ChatSessionSummary, StreamStatus } from '..
 
 const SESSION_KEY = 'rin1.frontend.sessions'
 const MESSAGE_KEY_PREFIX = 'rin1.frontend.messages.'
+const WEB_SEARCH_KEY = 'rin1.frontend.web-search-enabled'
 
 const QUICK_PROMPTS = [
   '对方最近总是已读不回，我应该怎么沟通？',
   '帮我准备一段既坚定又温柔的边界表达。',
   '我们因为小事频繁争吵，先从哪一步修复最有效？',
   '给我一个 7 天关系升温行动清单。',
+]
+
+const SESSION_TAG_RULES: Array<{ tag: string; keywords: string[] }> = [
+  { tag: '沟通', keywords: ['沟通', '表达', '聊天', '对话', '已读不回'] },
+  { tag: '冲突', keywords: ['争吵', '冲突', '冷战', '拉黑', '吵架'] },
+  { tag: '边界', keywords: ['边界', '尊重', '控制', '拒绝', '压力'] },
+  { tag: '修复', keywords: ['修复', '和好', '挽回', '复合', '缓和'] },
+  { tag: '信任', keywords: ['信任', '怀疑', '安全感', '背叛'] },
+  { tag: '成长', keywords: ['成长', '自我', '反思', '提升'] },
 ]
 
 function createId(prefix: string) {
@@ -25,8 +35,16 @@ function loadSessions() {
   if (!raw) {
     return [] as ChatSessionSummary[]
   }
+
   try {
-    return JSON.parse(raw) as ChatSessionSummary[]
+    const parsed = JSON.parse(raw) as Array<Partial<ChatSessionSummary>>
+    return parsed.map((item) => ({
+      id: item.id ?? createId('chat'),
+      title: item.title ?? '新会话',
+      preview: item.preview ?? '等待提问',
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      updatedAt: item.updatedAt ?? new Date().toISOString(),
+    }))
   } catch {
     return [] as ChatSessionSummary[]
   }
@@ -48,6 +66,14 @@ function saveMessages(chatId: string, messages: ChatMessage[]) {
   localStorage.setItem(`${MESSAGE_KEY_PREFIX}${chatId}`, JSON.stringify(messages))
 }
 
+function extractSessionTags(messages: ChatMessage[]) {
+  const text = messages.map((message) => message.content).join(' ').toLowerCase()
+  const matched = SESSION_TAG_RULES.filter((rule) =>
+    rule.keywords.some((keyword) => text.includes(keyword.toLowerCase())),
+  ).map((rule) => rule.tag)
+  return matched.slice(0, 3)
+}
+
 function summarizeSession(chatId: string, messages: ChatMessage[]): ChatSessionSummary {
   const firstUser = messages.find((message) => message.role === 'user')
   const lastMessage = messages[messages.length - 1]
@@ -58,19 +84,19 @@ function summarizeSession(chatId: string, messages: ChatMessage[]): ChatSessionS
     id: chatId,
     title,
     preview,
+    tags: extractSessionTags(messages),
     updatedAt: new Date().toISOString(),
   }
 }
 
 export const useChatStore = defineStore('chat', () => {
-  // mode 会决定请求哪个后端接口（basic/rag/mcp）
   const mode = ref<ChatMode>('mcp')
   const status = ref<StreamStatus>('idle')
-  // chatId 是后端会话记忆的关键字段，同一 chatId 才能延续上下文
   const chatId = ref(createId('chat'))
   const messages = ref<ChatMessage[]>([])
   const sessions = ref<ChatSessionSummary[]>([])
   const stopStreaming = ref<null | (() => void)>(null)
+  const webSearchEnabled = ref(localStorage.getItem(WEB_SEARCH_KEY) === '1')
 
   const isStreaming = computed(() => status.value === 'streaming')
   const canRetry = computed(() => messages.value.some((item) => item.role === 'user') && !isStreaming.value)
@@ -129,15 +155,15 @@ export const useChatStore = defineStore('chat', () => {
     let receivedChunk = false
     let stoppedByUser = false
     let streamError = ''
+    const requestMode: ChatMode = webSearchEnabled.value ? 'mcp' : mode.value
 
     await new Promise<void>((resolve) => {
       const stop = streamChat({
-        mode: mode.value,
+        mode: requestMode,
         message: content,
         chatId: chatId.value,
         onChunk: (chunk) => {
           receivedChunk = true
-          // 把后端 SSE 分片逐段拼接成完整回复
           const previous = messages.value.find((item) => item.id === assistantId)?.content ?? ''
           patchMessage(assistantId, { content: `${previous}${chunk}` })
         },
@@ -158,9 +184,8 @@ export const useChatStore = defineStore('chat', () => {
     stopStreaming.value = null
     patchMessage(assistantId, { isStreaming: false })
 
-    if (!receivedChunk && !stoppedByUser && mode.value === 'basic') {
+    if (!receivedChunk && !stoppedByUser && requestMode === 'basic') {
       try {
-        // 仅 basic 模式下使用同步接口兜底，减少首包失败带来的空回复
         const fallback = await syncChat(content, chatId.value)
         patchMessage(assistantId, {
           content: fallback,
@@ -206,6 +231,35 @@ export const useChatStore = defineStore('chat', () => {
     void sendMessage(lastUserMessage.content)
   }
 
+  function revokeUserMessage(messageId: string) {
+    if (isStreaming.value) {
+      stopMessage()
+    }
+
+    const index = messages.value.findIndex((item) => item.id === messageId)
+    if (index < 0) {
+      return
+    }
+
+    const target = messages.value[index]
+    if (!target || target.role !== 'user') {
+      return
+    }
+
+    let end = index + 1
+    while (end < messages.value.length) {
+      const nextMessage = messages.value[end]
+      if (!nextMessage || nextMessage.role !== 'assistant') {
+        break
+      }
+      end += 1
+    }
+
+    messages.value.splice(index, end - index)
+    status.value = 'idle'
+    persistSession()
+  }
+
   function bootstrap() {
     sessions.value = loadSessions()
     const latest = sessions.value[0]
@@ -229,7 +283,6 @@ export const useChatStore = defineStore('chat', () => {
     if (isStreaming.value) {
       return
     }
-    // 切换本地会话时，后续发送会自动携带对应 chatId 给后端
     chatId.value = targetChatId
     messages.value = loadMessages(targetChatId)
     status.value = 'idle'
@@ -264,8 +317,14 @@ export const useChatStore = defineStore('chat', () => {
     mode.value = nextMode
   }
 
+  function toggleWebSearch() {
+    webSearchEnabled.value = !webSearchEnabled.value
+    localStorage.setItem(WEB_SEARCH_KEY, webSearchEnabled.value ? '1' : '0')
+  }
+
   return {
     mode,
+    webSearchEnabled,
     status,
     chatId,
     messages,
@@ -277,7 +336,9 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     stopMessage,
     retryLastPrompt,
+    revokeUserMessage,
     setMode,
+    toggleWebSearch,
     startNewSession,
     switchSession,
     removeSession,

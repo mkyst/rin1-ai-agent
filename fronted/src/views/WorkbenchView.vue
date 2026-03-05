@@ -4,15 +4,34 @@ import AppHeader from '../components/layout/AppHeader.vue'
 import SessionSidebar from '../components/sidebar/SessionSidebar.vue'
 import ChatPanel from '../components/chat/ChatPanel.vue'
 import InsightPanel from '../components/sidebar/InsightPanel.vue'
+import ModeCompareDrawer from '../components/chat/ModeCompareDrawer.vue'
+import RolePlayDrawer from '../components/chat/RolePlayDrawer.vue'
 import { useChatStore } from '../stores/chatStore'
 import { useInsights } from '../composables/useInsights'
-import type { ChatMode } from '../types/chat'
+import { collectStreamChat, syncChat } from '../composables/useSseChat'
+import type { ChatMode, CompareModeResult } from '../types/chat'
 
 const chatStore = useChatStore()
 const draft = ref('')
 const showBackToTop = ref(false)
 
-const { insightCards } = useInsights(computed(() => chatStore.messages))
+const compareOpen = ref(false)
+const comparePrompt = ref('')
+const compareRunning = ref(false)
+const compareResults = ref<CompareModeResult[]>([
+  { mode: 'basic', status: 'idle', content: '' },
+  { mode: 'rag', status: 'idle', content: '' },
+  { mode: 'mcp', status: 'idle', content: '' },
+])
+
+const rolePlayOpen = ref(false)
+const rolePlayScenario = ref('场景：对方最近经常已读不回，我想平和表达感受并约一次沟通。')
+const rolePlayUserLine = ref('')
+const rolePlayRunning = ref(false)
+const rolePlayTurns = ref<Array<{ id: string; user: string; partner: string }>>([])
+const rolePlayChatId = ref(`${chatStore.chatId}-roleplay`)
+
+const { insightCards, radarMetrics } = useInsights(computed(() => chatStore.messages))
 
 function handleModeChange(mode: ChatMode) {
   chatStore.setMode(mode)
@@ -40,6 +59,134 @@ function backToTop() {
     top: 0,
     behavior: 'smooth',
   })
+}
+
+function resetCompareResults() {
+  compareResults.value = [
+    { mode: 'basic', status: 'idle', content: '' },
+    { mode: 'rag', status: 'idle', content: '' },
+    { mode: 'mcp', status: 'idle', content: '' },
+  ]
+}
+
+function updateCompareResult(mode: ChatMode, patch: Partial<CompareModeResult>) {
+  const target = compareResults.value.find((item) => item.mode === mode)
+  if (!target) {
+    return
+  }
+  Object.assign(target, patch)
+}
+
+function buildCompareChatId(mode: ChatMode) {
+  return `${chatStore.chatId}-cmp-${mode}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+}
+
+function openCompareDrawer() {
+  compareOpen.value = true
+  if (!comparePrompt.value.trim()) {
+    const latestUserMessage = [...chatStore.messages].reverse().find((message) => message.role === 'user')
+    comparePrompt.value = draft.value.trim() || latestUserMessage?.content || ''
+  }
+  if (!compareRunning.value) {
+    resetCompareResults()
+  }
+}
+
+function openRolePlayDrawer() {
+  rolePlayOpen.value = true
+}
+
+function closeRolePlayDrawer() {
+  rolePlayOpen.value = false
+}
+
+function clearRolePlayTurns() {
+  rolePlayTurns.value = []
+  rolePlayChatId.value = `${chatStore.chatId}-roleplay-${Date.now()}`
+}
+
+async function runRolePlayTurn() {
+  const scenario = rolePlayScenario.value.trim()
+  const userLine = rolePlayUserLine.value.trim()
+  if (!scenario || !userLine || rolePlayRunning.value) {
+    return
+  }
+
+  rolePlayRunning.value = true
+  const transcript = rolePlayTurns.value
+    .map((turn, index) => `第${index + 1}轮\\n我：${turn.user}\\n对方：${turn.partner}`)
+    .join('\\n\\n')
+
+  const prompt = [
+    '你正在做“对话预演”的角色扮演。',
+    '你扮演“对方”，我扮演“我”。',
+    `场景：${scenario}`,
+    transcript ? `历史对话：\\n${transcript}` : '这是第一轮。',
+    `我这次说：${userLine}`,
+    '请只回复“对方”这一句，语气自然、简短、可继续对话，不要解释。'
+  ].join('\\n\\n')
+
+  try {
+    const reply = await syncChat(prompt, rolePlayChatId.value)
+    const cleanedReply = reply.replace(/^对方[:：]\\s*/u, '').trim()
+    rolePlayTurns.value.push({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      user: userLine,
+      partner: cleanedReply || '...',
+    })
+    rolePlayUserLine.value = ''
+  } catch {
+    rolePlayTurns.value.push({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      user: userLine,
+      partner: '生成失败，请稍后重试。',
+    })
+  } finally {
+    rolePlayRunning.value = false
+  }
+}
+
+function closeCompareDrawer() {
+  compareOpen.value = false
+}
+
+async function runModeComparison() {
+  const prompt = comparePrompt.value.trim()
+  if (!prompt || compareRunning.value) {
+    return
+  }
+
+  compareRunning.value = true
+  resetCompareResults()
+  for (const mode of ['basic', 'rag', 'mcp'] as ChatMode[]) {
+    updateCompareResult(mode, { status: 'loading', content: '', error: undefined })
+  }
+
+  await Promise.all(
+    (['basic', 'rag', 'mcp'] as ChatMode[]).map(async (mode) => {
+      try {
+        const compareChatId = buildCompareChatId(mode)
+        const content =
+          mode === 'basic'
+            ? await syncChat(prompt, compareChatId)
+            : await collectStreamChat(mode, prompt, compareChatId)
+
+        updateCompareResult(mode, {
+          status: 'success',
+          content,
+          error: undefined,
+        })
+      } catch (error) {
+        updateCompareResult(mode, {
+          status: 'error',
+          content: '',
+          error: error instanceof Error ? error.message : '请求失败，请稍后重试。',
+        })
+      }
+    }),
+  )
+
+  compareRunning.value = false
 }
 
 onMounted(() => {
@@ -79,18 +226,44 @@ onUnmounted(() => {
         :messages="chatStore.messages"
         :is-streaming="chatStore.isStreaming"
         :can-retry="chatStore.canRetry"
+        :web-search-enabled="chatStore.webSearchEnabled"
         @send="handleSend"
         @stop="chatStore.stopMessage"
         @retry="chatStore.retryLastPrompt"
+        @toggle-web-search="chatStore.toggleWebSearch"
+        @open-role-play="openRolePlayDrawer"
+        @revoke-message="chatStore.revokeUserMessage"
+        @open-compare="openCompareDrawer"
       />
 
       <InsightPanel
         class="reveal reveal--4"
         :cards="insightCards"
+        :radar-metrics="radarMetrics"
         :quick-prompts="chatStore.quickPrompts"
         @use-prompt="applyPrompt"
       />
     </section>
+
+    <ModeCompareDrawer
+      v-model:prompt="comparePrompt"
+      :open="compareOpen"
+      :running="compareRunning"
+      :results="compareResults"
+      @close="closeCompareDrawer"
+      @run="runModeComparison"
+    />
+
+    <RolePlayDrawer
+      v-model:scenario="rolePlayScenario"
+      v-model:user-line="rolePlayUserLine"
+      :open="rolePlayOpen"
+      :running="rolePlayRunning"
+      :history="rolePlayTurns"
+      @close="closeRolePlayDrawer"
+      @clear="clearRolePlayTurns"
+      @run="runRolePlayTurn"
+    />
 
     <button
       v-show="showBackToTop"
